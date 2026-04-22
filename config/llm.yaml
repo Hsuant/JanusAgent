@@ -1,0 +1,54 @@
+# LLM 配置
+# 支持多提供商配置，可用于主模型和备选模型
+
+# 主模型配置（必须）
+primary:
+  provider: anthropic                     # 提供商：anthropic | openai | localhost | others
+  model: claude-sonnet-4-5-20250929       # 模型名称
+  base_url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+  api_key: ${ANTHROPIC_API_KEY:}           # 从环境变量读取
+  max_tokens: 4096
+  temperature: 0.7
+  timeout: 120                            # 请求超时时间（秒）
+
+# 备选模型配置（可选，主模型失败时依次尝试）
+fallbacks:
+  - provider: openai
+    model: gpt-4o
+    base_url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    api_key: ${OPENAI_API_KEY:}
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: 120
+
+  - provider: anthropic
+    model: claude-haiku-3-5-20241022
+    base_url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+    api_key: ${ANTHROPIC_API_KEY:}
+    max_tokens: 4096
+    temperature: 0.5
+    timeout: 60
+
+    # 自选API厂商服务
+  - provider: openai_compatible
+    model: minimax/minimax-m2.5:free
+    base_url: ${CUSTOMIZE_BASE_URL:}
+    api_key: ${CUSTOMIZE_API_KEY:}
+    max_tokens: 4096
+    temperature: 0.5
+    timeout: 60
+
+    # 本地模型
+  - provider: localhost
+    model: your-model-name
+    base_url: ${LOCAL_MODEL_BASE_URL:http://127.0.0.1:11434/v1}
+    api_key: ${LOCAL_MODEL_API_KEY:not-needed}
+    max_tokens: 2048
+    temperature: 0.5
+    timeout: 180
+
+# 全局默认参数
+defaults:
+  max_retries: 3                          # 最大重试次数
+  retry_delay: 1.0                        # 重试间隔（秒）
+  request_timeout: 120                    # 默认请求超时

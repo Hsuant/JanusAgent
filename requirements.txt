@@ -1,0 +1,20 @@
+
+# MCP Client 依赖
+httpx>=0.27.0          # HTTP 异步客户端
+pydantic>=2.0.0        # 数据验证（可选）
+python-dotenv>=1.0.0   # 环境变量加载
+pyyaml>=6.0            # YAML 配置文件解析
+
+# 核心依赖
+httpx>=0.27.0
+pyyaml>=6.0
+
+# 浏览器自动化
+playwright>=1.40.0
+
+# 终端管理
+libtmux>=0.23.0
+
+# 代码执行
+jupyter-client>=8.0.0
+ipykernel>=6.0.0

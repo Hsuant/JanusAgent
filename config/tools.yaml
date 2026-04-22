@@ -1,0 +1,23 @@
+# 工具库配置文件示例
+browser:
+  headless: true
+  default_timeout: 30000
+  viewport_width: 1280
+  viewport_height: 720
+
+terminal:
+  session_name_prefix: "aegiscracker_"
+  command_timeout: 60
+  max_output_lines: 500
+
+note:
+  storage_path: "./data/notes"
+  auto_save: true
+
+executor:
+  kernel_name: "python3"
+  max_sessions: 5
+  execution_timeout: 30
+  workspace_path: "./data/workspace"
+
+debug: false

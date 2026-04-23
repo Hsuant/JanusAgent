@@ -100,13 +100,13 @@ class BaseLLM(ABC):
     @abstractmethod
     async def generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """异步生成回复。
 
         Args:
-            messages: 对话消息列表，按时间顺序排列。
+            messages: 已转换为字典格式的对话消息列表，每条消息包含 "role" 和 "content" 字段。
             **kwargs: 提供商特定的额外参数，会覆盖配置中的默认值。
 
         Returns:
@@ -120,7 +120,7 @@ class BaseLLM(ABC):
     @abstractmethod
     def generate_sync(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """同步生成回复。
@@ -128,7 +128,7 @@ class BaseLLM(ABC):
         该方法为便利封装，内部应调用异步方法。在非异步环境中使用。
 
         Args:
-            messages: 对话消息列表。
+            messages: 已转换为字典格式的对话消息列表。
             **kwargs: 提供商特定的额外参数。
 
         Returns:
@@ -139,13 +139,13 @@ class BaseLLM(ABC):
     @abstractmethod
     async def stream_generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ):
         """异步流式生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 已转换为字典格式的对话消息列表。
             **kwargs: 提供商特定的额外参数。
 
         Yields:
@@ -153,6 +153,40 @@ class BaseLLM(ABC):
         """
         pass
 
+
+class LLMInfo(Exception):
+    """LLM 调用过程中的信息性消息。
+
+    用于传递不需要中断流程的提示信息（如模型版本、弃用通知）。
+    """
+
+    def __init__(self, message: str, provider: Optional[str] = None) -> None:
+        """初始化 LLM 信息。
+
+        Args:
+            message: 信息描述。
+            provider: 提供商名称。
+        """
+        super().__init__(message)
+        self.provider = provider
+
+class LLMWarning(Exception):
+    """LLM 调用过程中的警告信息。
+
+    用于表示非致命的异常情况（如速率限制、模型过载），调用方可选择忽略或记录。
+    """
+
+    def __init__(self, message: str, provider: Optional[str] = None, cause: Optional[Exception] = None) -> None:
+        """初始化 LLM 警告。
+
+        Args:
+            message: 警告描述信息。
+            provider: 发生警告的提供商名称。
+            cause: 原始异常对象（可选）。
+        """
+        super().__init__(message)
+        self.provider = provider
+        self.cause = cause
 
 class LLMError(Exception):
     """LLM 调用相关异常基类。
@@ -171,3 +205,33 @@ class LLMError(Exception):
         super().__init__(message)
         self.provider = provider
         self.cause = cause
+
+
+class LLMDebug(Exception):
+    """LLM 调用过程中的调试信息。
+
+    用于传递详细的调试数据（如请求载荷、响应元数据），仅在调试模式下记录，
+    不影响正常执行流程。
+
+    Attributes:
+        message: 调试描述信息。
+        provider: 提供商名称。
+        data: 附加的调试数据字典。
+    """
+
+    def __init__(
+        self,
+        message: str,
+        provider: Optional[str] = None,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """初始化 LLM 调试信息。
+
+        Args:
+            message: 调试描述信息。
+            provider: 发生调试事件的提供商名称。
+            data: 可选的附加数据，如请求参数、响应头等。
+        """
+        super().__init__(message)
+        self.provider = provider
+        self.data = data or {}

@@ -49,6 +49,14 @@ class PromptManager:
         self._cache[name] = content
         return content
 
+    def get_agent_system_prompt(self) -> str:
+        """获取 Agent 系统提示词。
+
+        Returns:
+            str: 系统提示词内容。
+        """
+        return self.load_prompt("agent_system")
+
     def get_pentest_agent_prompt(self) -> str:
         """获取渗透测试 Agent 的系统提示词。
 

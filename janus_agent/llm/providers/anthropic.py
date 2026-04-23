@@ -4,11 +4,12 @@
 """
 
 import asyncio
+import json
 from typing import Any, Dict, List, Optional
 
 import httpx
 
-from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMMessage, LLMResponse
+from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMResponse
 
 
 class AnthropicLLM(BaseLLM):
@@ -59,14 +60,14 @@ class AnthropicLLM(BaseLLM):
         """异步上下文管理器出口，自动关闭连接。"""
         await self._close_client()
 
-    def _convert_messages(self, messages: List[LLMMessage]) -> tuple[Optional[str], List[Dict[str, Any]]]:
-        """将内部消息格式转换为 Anthropic API 要求的格式。
+    def _convert_messages(self, messages: List[Dict[str, str]]) -> tuple[Optional[str], List[Dict[str, Any]]]:
+        """将字典格式消息转换为 Anthropic API 要求的格式。
 
         Anthropic 要求 system 提示词作为顶层参数，而非常规消息。
         同时消息中不能有 system 角色。
 
         Args:
-            messages: 内部 LLMMessage 列表。
+            messages: 标准字典消息列表，每个元素包含 "role" 和 "content"。
 
         Returns:
             tuple[Optional[str], List[Dict]]: 包含 system 提示词和转换后的消息列表。
@@ -74,22 +75,22 @@ class AnthropicLLM(BaseLLM):
         system_prompt = None
         converted = []
         for msg in messages:
-            if msg.role == "system":
-                # 如果有多个 system 消息，取最后一个或拼接（这里取最后一个）
-                system_prompt = msg.content
+            if msg["role"] == "system":
+                # 如果有多个 system 消息，取最后一个
+                system_prompt = msg["content"]
             else:
-                converted.append({"role": msg.role, "content": msg.content})
+                converted.append({"role": msg["role"], "content": msg["content"]})
         return system_prompt, converted
 
     async def generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """异步生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数，如 temperature、max_tokens。
 
         Returns:
@@ -153,13 +154,13 @@ class AnthropicLLM(BaseLLM):
 
     def generate_sync(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """同步生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数。
 
         Returns:
@@ -168,24 +169,22 @@ class AnthropicLLM(BaseLLM):
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # 如果已在事件循环中运行，使用 nest_asyncio 或抛出明确错误
                 raise RuntimeError(
                     "在运行中的事件循环里无法使用同步方法，请改用异步方法 generate()"
                 )
             return loop.run_until_complete(self.generate(messages, **kwargs))
         except RuntimeError:
-            # 没有事件循环，创建一个新的
             return asyncio.run(self.generate(messages, **kwargs))
 
     async def stream_generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ):
         """异步流式生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数。
 
         Yields:
@@ -212,7 +211,6 @@ class AnthropicLLM(BaseLLM):
                         data_str = line[6:]
                         if data_str == "[DONE]":
                             break
-                        import json
                         try:
                             event = json.loads(data_str)
                             if event.get("type") == "content_block_delta":

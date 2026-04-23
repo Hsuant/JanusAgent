@@ -4,6 +4,7 @@
 支持主模型和备选模型的多层配置。
 """
 
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -11,7 +12,9 @@ from typing import Any, Dict, List, Optional, Type
 
 import yaml
 
-from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError
+from langchain_core.messages import BaseMessage, AIMessage
+
+from janus_agent.llm.base import BaseLLM, LLMConfig, LLMResponse, LLMInfo, LLMWarning, LLMError, LLMDebug
 from janus_agent.llm.providers import AnthropicLLM, OpenAILLM, OpenAICompatibleLLM, LocalLLM
 
 
@@ -279,49 +282,128 @@ class LLMChain:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
 
-    async def generate(
-        self,
-        messages: List[Any],
-        **kwargs: Any,
-    ) -> Any:
-        """异步生成回复，自动处理故障转移。
+        # 构建模型序列，并通过 id 去重（避免同一实例重复添加）
+        seen_ids = set()
+        sequence = []
+        for model in [primary] + fallbacks:
+            if id(model) not in seen_ids:
+                seen_ids.add(id(model))
+                sequence.append(model)
+        self._model_sequence = sequence
+        # 缓存上次成功调用的模型实例
+        self._last_success_index = -1
 
-        执行顺序：
-        1. 尝试主模型，最多重试 max_retries 次。
-        2. 主模型失败后，依次尝试备选模型，每个备选模型最多重试一次。
-        3. 所有模型都失败则抛出异常。
+        # 用于并发控制
+        self._lock = asyncio.Lock()
+
+    async def generate(
+            self,
+            messages: List[BaseMessage],
+            **kwargs: Any,
+    ) -> AIMessage:
+        formatted_messages = self._convert_messages_to_dict(messages)
+
+        # 1. 尝试主模型（索引 0）
+        last_error = None
+        try:
+            response = await self._try_model_with_retry(
+                self.primary, formatted_messages, **kwargs
+            )
+            self._last_success_index = 0
+            return AIMessage(content=response.content)
+        except Exception as e:
+            last_error = e
+            LLMWarning(
+                f"主模型 {self.primary.config.model} 调用失败: {e}"
+            )
+
+        # 2. 构建备选模型尝试顺序
+        # 获取所有备选模型的索引（从 1 开始）
+        fallback_candidates = list(range(1, len(self._model_sequence)))
+
+        # 如果上次有成功的备选模型，且其索引有效，则将其提到最前面
+        if self._last_success_index > 0 and self._last_success_index < len(self._model_sequence):
+            # 从候选列表中移除该索引，然后插入到首位
+            if self._last_success_index in fallback_candidates:
+                fallback_candidates.remove(self._last_success_index)
+            fallback_candidates.insert(0, self._last_success_index)
+
+        # 3. 依次尝试备选模型
+        for idx in fallback_candidates:
+            model = self._model_sequence[idx]
+            try:
+                response = await self._try_model_with_retry(
+                    model, formatted_messages, **kwargs
+                )
+                self._last_success_index = idx
+                LLMInfo(
+                    f"备选模型 {model.config.model} 调用成功，已记录为优先备选"
+                )
+                return AIMessage(content=response.content)
+            except Exception as e:
+                last_error = e
+                LLMWarning(
+                    f"备选模型 {model.config.model} 调用失败: {e}"
+                )
+                continue
+
+        # 所有模型均失败
+        raise LLMError(f"所有 LLM 模型调用均失败，最后一个错误: {str(last_error)}")
+
+    async def _try_model_with_retry(
+            self,
+            model: BaseLLM,
+            messages: List[Dict[str, str]],
+            **kwargs: Any,
+    ) -> LLMResponse:
+        """对单个模型进行带重试的调用。
 
         Args:
-            messages: 对话消息列表（LLMMessage 列表）。
-            **kwargs: 传递给具体模型的参数。
+            model: 要调用的 LLM 实例。
+            messages: 已格式化的消息列表。
+            **kwargs: 额外参数。
 
         Returns:
-            LLMResponse: 生成结果。
+            LLMResponse: 成功响应。
 
         Raises:
-            LLMError: 所有模型均调用失败时抛出。
+            Exception: 重试耗尽后仍失败则抛出最后一个异常。
         """
-        import asyncio
+        last_exc = None
+        for attempt in range(self.max_retries):
+            try:
+                return await model.generate(messages, **kwargs)
+            except Exception as e:
+                last_exc = e
+                if attempt < self.max_retries - 1:
+                    await asyncio.sleep(self.retry_delay)
+                    LLMDebug(
+                        f"模型 {model.config.model} 重试 {attempt + 1}/{self.max_retries}"
+                    )
+        raise last_exc
 
-        models_to_try = [self.primary] + self.fallbacks
-        last_error: Optional[Exception] = None
+    def _convert_messages_to_dict(
+            self, messages: List[BaseMessage]
+    ) -> List[Dict[str, str]]:
+        """将 LangChain 消息列表转换为统一的字典格式。"""
+        converted = []
+        for msg in messages:
+            role = self._get_role_from_message(msg)
+            converted.append({"role": role, "content": msg.content})
+        return converted
 
-        for idx, llm in enumerate(models_to_try):
-            retries = self.max_retries if idx == 0 else 1  # 主模型多次重试，备选模型只试一次
-            for attempt in range(retries):
-                try:
-                    return await llm.generate(messages, **kwargs)
-                except Exception as e:
-                    last_error = e
-                    if attempt < retries - 1:
-                        await asyncio.sleep(self.retry_delay)
-                        continue
-                    # 记录失败，尝试下一个模型
-                    break
-
-        raise LLMError(
-            f"所有 LLM 模型调用均失败，最后一个错误: {str(last_error)}"
-        ) from last_error
+    @staticmethod
+    def _get_role_from_message(msg: BaseMessage) -> str:
+        """根据消息类型获取角色字符串。"""
+        msg_type = msg.type  # LangChain 内置属性：'system', 'human', 'ai', 'tool', 'function'
+        role_mapping = {
+            "system": "system",
+            "human": "user",
+            "ai": "assistant",
+            "tool": "tool",
+            "function": "function",
+        }
+        return role_mapping.get(msg_type, "user")  # 默认 user
 
     def generate_sync(
         self,

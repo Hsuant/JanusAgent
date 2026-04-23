@@ -9,8 +9,9 @@ import json
 from typing import Any, Dict, List, Optional
 
 import httpx
+from httpx import AsyncClient
 
-from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMMessage, LLMResponse
+from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMResponse
 
 
 class OpenAICompatibleLLM(BaseLLM):
@@ -29,7 +30,7 @@ class OpenAICompatibleLLM(BaseLLM):
         super().__init__(config)
         self._client: Optional[httpx.AsyncClient] = None
 
-    def _get_client(self) -> httpx.AsyncClient:
+    def _get_client(self) -> AsyncClient | None:
         """获取或创建 HTTP 异步客户端。
 
         Returns:
@@ -62,26 +63,15 @@ class OpenAICompatibleLLM(BaseLLM):
         """异步上下文管理器出口。"""
         await self._close_client()
 
-    def _convert_messages(self, messages: List[LLMMessage]) -> List[Dict[str, str]]:
-        """将内部消息格式转换为 OpenAI 兼容格式。
-
-        Args:
-            messages: 内部 LLMMessage 列表。
-
-        Returns:
-            List[Dict]: 符合 OpenAI 格式的消息列表。
-        """
-        return [{"role": msg.role, "content": msg.content} for msg in messages]
-
     async def generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """异步生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数。
 
         Returns:
@@ -91,11 +81,10 @@ class OpenAICompatibleLLM(BaseLLM):
             LLMError: API 调用失败时抛出。
         """
         client = self._get_client()
-        api_messages = self._convert_messages(messages)
 
         payload: Dict[str, Any] = {
             "model": self.config.model,
-            "messages": api_messages,
+            "messages": messages,
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
             "temperature": kwargs.get("temperature", self.config.temperature),
         }
@@ -146,13 +135,13 @@ class OpenAICompatibleLLM(BaseLLM):
 
     def generate_sync(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """同步生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数。
 
         Returns:
@@ -170,24 +159,23 @@ class OpenAICompatibleLLM(BaseLLM):
 
     async def stream_generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ):
         """异步流式生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数。
 
         Yields:
             str: 流式文本片段。
         """
         client = self._get_client()
-        api_messages = self._convert_messages(messages)
 
         payload: Dict[str, Any] = {
             "model": self.config.model,
-            "messages": api_messages,
+            "messages": messages,
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
             "temperature": kwargs.get("temperature", self.config.temperature),
             "stream": True,

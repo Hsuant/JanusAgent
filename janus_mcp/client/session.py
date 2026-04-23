@@ -4,7 +4,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from janus_mcp.client.config import MCPClientConfig
-from janus_mcp.client.exceptions import ConnectionError
+from janus_mcp.client.exceptions import ToolExecutionError, ConnectionError
 from janus_mcp.client.protocol import JSONRPCRequest, MCPMessageFactory
 from janus_mcp.client.transport import HTTPTransport, MCPTransport, StdioTransport
 
@@ -46,14 +46,17 @@ class MCPSession:
         if not self._initialized:
             await self.initialize()
 
-    async def list_tools(self, force: bool = False) -> List[Any]:
+    async def list_tools(self, force: bool = False) -> list | None:
         await self._ensure_initialized()
         if self._tools_cache is not None and not force:
             return self._tools_cache
         req = MCPMessageFactory.create_list_tools_request()
         resp = await self.transport.send_request(req)
         resp.raise_for_error()
-        self._tools_cache = resp.result.get("tools", [])
+
+        # 根据 MCP 规范，tools 在 result.tools 中
+        tools = resp.result.get("tools", [])
+        self._tools_cache = tools
         return self._tools_cache
 
     async def call_tool(self, tool_name: str, arguments: Optional[Dict] = None) -> Any:
@@ -63,7 +66,6 @@ class MCPSession:
         resp.raise_for_error()
         result = resp.result
         if result.get("isError"):
-            from mcp.client.exceptions import ToolExecutionError
             raise ToolExecutionError(f"工具执行失败: {result.get('content')}")
         return result.get("content", [])
 

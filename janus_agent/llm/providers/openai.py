@@ -4,11 +4,12 @@
 """
 
 import asyncio
+import json
 from typing import Any, Dict, List, Optional
 
 import httpx
 
-from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMMessage, LLMResponse
+from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMResponse
 
 
 class OpenAILLM(BaseLLM):
@@ -58,28 +59,15 @@ class OpenAILLM(BaseLLM):
         """异步上下文管理器出口，自动关闭连接。"""
         await self._close_client()
 
-    def _convert_messages(self, messages: List[LLMMessage]) -> List[Dict[str, str]]:
-        """将内部消息格式转换为 OpenAI API 要求的格式。
-
-        OpenAI 原生支持 system 角色，无需特殊处理。
-
-        Args:
-            messages: 内部 LLMMessage 列表。
-
-        Returns:
-            List[Dict]: 符合 OpenAI 格式的消息列表。
-        """
-        return [{"role": msg.role, "content": msg.content} for msg in messages]
-
     async def generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """异步生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表，每条包含 "role" 和 "content"。
             **kwargs: 可覆盖配置参数，如 temperature、max_tokens。
 
         Returns:
@@ -89,12 +77,11 @@ class OpenAILLM(BaseLLM):
             LLMError: API 调用失败或返回错误时抛出。
         """
         client = self._get_client()
-        api_messages = self._convert_messages(messages)
 
-        # 构建请求体
+        # 构建请求体（消息格式已符合 OpenAI 要求）
         payload: Dict[str, Any] = {
             "model": self.config.model,
-            "messages": api_messages,
+            "messages": messages,
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
             "temperature": kwargs.get("temperature", self.config.temperature),
         }
@@ -137,13 +124,13 @@ class OpenAILLM(BaseLLM):
 
     def generate_sync(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """同步生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数。
 
         Returns:
@@ -161,24 +148,23 @@ class OpenAILLM(BaseLLM):
 
     async def stream_generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ):
         """异步流式生成回复。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表。
             **kwargs: 可覆盖配置参数。
 
         Yields:
             str: 流式文本片段。
         """
         client = self._get_client()
-        api_messages = self._convert_messages(messages)
 
         payload: Dict[str, Any] = {
             "model": self.config.model,
-            "messages": api_messages,
+            "messages": messages,
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
             "temperature": kwargs.get("temperature", self.config.temperature),
             "stream": True,
@@ -192,7 +178,6 @@ class OpenAILLM(BaseLLM):
                         data_str = line[6:]
                         if data_str == "[DONE]":
                             break
-                        import json
                         try:
                             event = json.loads(data_str)
                             delta = event.get("choices", [{}])[0].get("delta", {})

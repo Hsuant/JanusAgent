@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMMessage, LLMResponse
+from janus_agent.llm.base import BaseLLM, LLMConfig, LLMError, LLMResponse
 
 
 class LocalLLM(BaseLLM):
@@ -96,13 +96,13 @@ class LocalLLM(BaseLLM):
 
     async def generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """异步生成回复（使用 Ollama /api/chat）。
 
         Args:
-            messages: 对话消息列表。
+            messages: 标准字典消息列表，每条包含 "role" 和 "content"。
             **kwargs: 可覆盖配置参数，支持：
                 - max_tokens: 最大生成 token 数
                 - temperature: 温度参数
@@ -113,9 +113,6 @@ class LocalLLM(BaseLLM):
         """
         client = self._get_client()
 
-        # 转换消息格式
-        ollama_messages = [{"role": m.role, "content": m.content} for m in messages]
-
         # 构建 options 字典
         options = {
             "num_predict": kwargs.get("max_tokens", self.config.max_tokens),
@@ -125,7 +122,7 @@ class LocalLLM(BaseLLM):
         extra_options = self.config.extra_params.get("options", {})
         options.update(extra_options)
 
-        # 额外允许用户通过 kwargs 直接传入 Ollama 支持的参数（如 top_p, repeat_penalty）
+        # 额外允许用户通过 kwargs 直接传入 Ollama 支持的参数
         ollama_specific_params = ["top_p", "top_k", "repeat_penalty", "seed", "stop"]
         for param in ollama_specific_params:
             if param in kwargs:
@@ -133,7 +130,7 @@ class LocalLLM(BaseLLM):
 
         payload: Dict[str, Any] = {
             "model": self.config.model,
-            "messages": ollama_messages,
+            "messages": messages,
             "stream": False,
             "options": options,
         }
@@ -162,7 +159,6 @@ class LocalLLM(BaseLLM):
 
         try:
             content = data["message"]["content"]
-            # Ollama 返回的 token 统计字段
             usage = {
                 "prompt_tokens": data.get("prompt_eval_count", 0),
                 "completion_tokens": data.get("eval_count", 0),
@@ -184,7 +180,7 @@ class LocalLLM(BaseLLM):
 
     def generate_sync(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ) -> LLMResponse:
         """同步生成回复。
@@ -203,7 +199,7 @@ class LocalLLM(BaseLLM):
 
     async def stream_generate(
         self,
-        messages: List[LLMMessage],
+        messages: List[Dict[str, str]],
         **kwargs: Any,
     ):
         """异步流式生成回复（Ollama 原生流式）。
@@ -212,7 +208,6 @@ class LocalLLM(BaseLLM):
             str: 流式文本片段。
         """
         client = self._get_client()
-        ollama_messages = [{"role": m.role, "content": m.content} for m in messages]
 
         options = {
             "num_predict": kwargs.get("max_tokens", self.config.max_tokens),
@@ -228,7 +223,7 @@ class LocalLLM(BaseLLM):
 
         payload: Dict[str, Any] = {
             "model": self.config.model,
-            "messages": ollama_messages,
+            "messages": messages,
             "stream": True,
             "options": options,
         }
@@ -244,10 +239,8 @@ class LocalLLM(BaseLLM):
                         continue
                     try:
                         event = json.loads(line)
-                        # Ollama 流式响应中，内容在 message.content 中
                         if "message" in event and "content" in event["message"]:
                             yield event["message"]["content"]
-                        # 若服务返回 done 标记，提前结束
                         if event.get("done", False):
                             break
                     except json.JSONDecodeError:

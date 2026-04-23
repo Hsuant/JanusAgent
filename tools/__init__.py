@@ -1,4 +1,4 @@
-"""AegisCracker 工具库。
+"""JanusAgent 工具库。
 
 提供本地可调用的网络安全工具集，包括：
 - 浏览器自动化 (BrowserTool)

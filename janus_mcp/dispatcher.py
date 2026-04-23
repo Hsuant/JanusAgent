@@ -64,12 +64,32 @@ class MCPToolDispatcher:
         if server_name in self._server_tools and not force_refresh:
             return self._server_tools[server_name]
 
-        # 获取客户端（自动连接）
-        client = await self._manager.get_client(server_name, config)
-
         # 获取工具列表
-        tools = await client.list_tools()
-        tool_names = [tool.get("name") for tool in tools if tool.get("name")]
+        try:
+            # 获取客户端（自动连接）
+            client = await self._manager.get_client(server_name, config)
+            tools = await client.list_tools()
+        except Exception as e:
+            logger.error("获取服务器 %s 工具列表失败: %s", server_name, e)
+            raise
+
+        print("tool类型 %s", type(tools))
+        # 提取工具名称，兼容多种返回格式
+        tool_names = []
+        if isinstance(tools, list):
+            for tool in tools:
+                if isinstance(tool, dict):
+                    name = tool.get("name")
+                elif hasattr(tool, "name"):
+                    name = tool.name
+                else:
+                    name = str(tool)
+                if name:
+                    tool_names.append(name)
+        else:
+            logger.warning("服务器 %s 返回的工具列表不是 list 类型: %s", server_name, type(tools))
+
+        logger.info("服务器 %s 提供 %d 个工具: %s", server_name, len(tool_names), tool_names[:10])
 
         # 更新注册表
         # 先清除该服务器旧映射
@@ -82,7 +102,7 @@ class MCPToolDispatcher:
         for tool_name in tool_names:
             self._tool_registry[tool_name] = server_name
 
-        logger.info("已注册服务器 '%s'，提供 %d 个工具", server_name, len(tool_names))
+        logger.info("服务器 %s 提供工具: %s", server_name, tool_names)
         return tool_names
 
     async def call_tool(

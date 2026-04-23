@@ -6,7 +6,7 @@ browser:
   viewport_height: 720
 
 terminal:
-  session_name_prefix: "aegiscracker_"
+  session_name_prefix: "JanusAgent_"
   command_timeout: 60
   max_output_lines: 500
 

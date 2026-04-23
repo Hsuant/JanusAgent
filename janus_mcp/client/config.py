@@ -22,7 +22,7 @@ class MCPClientConfig:
     verify_ssl: bool = True
     debug: bool = False
 
-    client_name: str = "AegisCracker"
+    client_name: str = "JanusAgent"
     client_version: str = "0.1.0"
 
     def __post_init__(self):

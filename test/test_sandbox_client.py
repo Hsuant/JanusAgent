@@ -226,7 +226,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--cmd",
-        default="python -m mcp.servers.sandbox",
+        default="python -m janus_mcp.servers.sandbox",
         help="STDIO 模式的服务器启动命令"
     )
     parser.add_argument(

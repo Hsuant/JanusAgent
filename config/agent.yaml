@@ -1,1 +1,32 @@
+# Agent 自身配置
 
+# 执行控制
+max_iterations: 10                       # 最大推理迭代次数
+timeout_per_task: 300                    # 单个任务总超时（秒）
+
+# 记忆配置
+memory:
+  short_term:
+    enabled: true
+    max_messages: 50                     # 会话中保留的最大消息数
+  long_term:
+    enabled: false                       # 是否启用长期记忆
+    vector_store: chroma                 # 向量数据库类型
+    collection_name: agent_memory
+    persist_directory: ./data/memory
+
+# 提示词配置
+prompts:
+  system_prompt_path: janus_agent/llm/prompts/agent_system.md
+  task_planner_path: janus_agent/llm/prompts/task_planner.md
+
+# 反思与学习
+reflection:
+  enabled: true
+  save_summary: true
+  summary_path: ./data/reflections
+
+# 日志
+logging:
+  level: INFO
+  file: ./logs/agent.log

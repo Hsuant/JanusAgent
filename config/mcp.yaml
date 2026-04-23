@@ -1,0 +1,39 @@
+# MCP 服务器配置
+# 定义所有可用的 MCP 服务器及其客户端连接参数
+
+servers:
+  # Sandbox 服务器（提供代码执行、浏览器、笔记等能力）
+  - name: sandbox
+    description: "安全沙箱服务，提供代码执行和浏览器自动化"
+    enabled: true
+    config:
+      transport: ${MCP_SANDBOX_TRANSPORT:http}                     # 传输协议：http 或 stdio
+      server_url: ${MCP_SANDBOX_URL:http://127.0.0.1:8000}
+      timeout: 120.0
+      connect_timeout: 10.0
+      max_retries: 3
+      retry_delay: 1.0
+      retry_backoff: 2.0
+      headers: {}
+      verify_ssl: false
+
+  # 示例：文件系统服务器（STDIO 模式）
+  # - name: filesystem
+  #   description: "文件系统操作服务"
+  #   enabled: false
+  #   config:
+  #     transport: stdio
+  #     server_command: python
+  #     server_args: ["-m", "janus_mcp.servers.filesystem"]
+  #     server_env:
+  #       WORKSPACE_PATH: ./workspace
+  #     timeout: 60.0
+
+  # 示例：可添加更多 MCP 服务器
+  # - name: database
+  #   description: "数据库查询服务"
+  #   enabled: false
+  #   config:
+  #     transport: http
+  #     server_url: http://localhost:8001
+  #     timeout: 30.0

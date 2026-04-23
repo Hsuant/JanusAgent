@@ -3,13 +3,13 @@
 
 # 主模型配置（必须）
 primary:
-  provider: anthropic                     # 提供商：anthropic | openai | localhost | others
-  model: claude-sonnet-4-5-20250929       # 模型名称
-  base_url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-  api_key: ${ANTHROPIC_API_KEY:}           # 从环境变量读取
-  max_tokens: 4096
-  temperature: 0.7
-  timeout: 120                            # 请求超时时间（秒）
+   provider: anthropic                     # 提供商：anthropic | openai | localhost | others
+   model: claude-sonnet-4-5-20250929       # 模型名称
+   base_url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+   api_key: ${ANTHROPIC_API_KEY:}           # 从环境变量读取
+   max_tokens: 4096
+   temperature: 0.7
+   timeout: 120                            # 请求超时时间（秒）
 
 # 备选模型配置（可选，主模型失败时依次尝试）
 fallbacks:
@@ -20,14 +20,6 @@ fallbacks:
     max_tokens: 4096
     temperature: 0.7
     timeout: 120
-
-  - provider: anthropic
-    model: claude-haiku-3-5-20241022
-    base_url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-    api_key: ${ANTHROPIC_API_KEY:}
-    max_tokens: 4096
-    temperature: 0.5
-    timeout: 60
 
     # 自选API厂商服务
   - provider: openai_compatible
